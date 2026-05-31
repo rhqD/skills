@@ -208,14 +208,19 @@ mapping_create() {
     --arg fwtype "$fwtype" \
     --arg servicehost "$inner_host" \
     --arg serviceport "$inner_port" \
-    --arg memo "${memo:-}" \
+    --arg memo "${memo:-映射}" \
     '{
       domain: $domain,
       port: ($port | tonumber),
       fwtype: ($fwtype | tonumber),
       servicehost: $servicehost,
-      serviceport: ($serviceport | tonumber)
-    } + (if $memo != "" then {memo: $memo} else {} end)')
+      serviceport: ($serviceport | tonumber),
+      memo: $memo,
+      type: 1,
+      bandwidth: 1,
+      logoid: 0,
+      key: ""
+    }')
 
   echo -e "${CYAN}正在创建映射...${NC}"
   local resp
@@ -234,11 +239,10 @@ mapping_update() {
     return 1
   fi
 
+  # 先取当前映射，确保 memo 和 fwtype 必填字段存在
   echo -e "${CYAN}正在查找映射...${NC}"
-  local resp
-  resp=$(api_get "/openapi/v2/mapping/list")
   local mapping
-  mapping=$(echo "$resp" | jq --arg d "$domain" --arg p "$port" --arg f "$fwtype" \
+  mapping=$(api_get "/openapi/v2/mapping/list" | jq --arg d "$domain" --arg p "$port" --arg f "$fwtype" \
     '.[] | select(.domain == $d and (.port | tostring) == $p and (.fwtype | tostring) == $f)')
 
   if [[ -z "$mapping" || "$mapping" == "null" ]]; then
@@ -246,15 +250,22 @@ mapping_update() {
     return 1
   fi
 
-  # 合并原始数据与更新字段
+  # 以当前 mapping 为基础，合并用户提供的更新字段
   local payload
-  payload=$(echo "$mapping" | jq --argjson updates "$update_json" '. + $updates')
+  payload=$(echo "$mapping" | jq --argjson updates "$update_json" '
+    { memo, fwtype, servicehost, serviceport } + $updates
+  ')
 
   echo -e "${CYAN}正在更新映射...${NC}"
-  resp=$(api_put "/openapi/v2/mapping/update" "$payload")
-  check_response "$resp" || { echo "$resp" | jq .; return 1; }
-  echo -e "${GREEN}映射更新成功${NC}"
-  echo "$resp" | jq .
+  local resp
+  resp=$(api_put "/openapi/v2/mappings/$domain/$port/$fwtype" "$payload")
+  if [[ -z "$resp" ]]; then
+    echo -e "${GREEN}映射更新成功${NC}"
+  else
+    check_response "$resp" || { echo "$resp" | jq .; return 1; }
+    echo -e "${GREEN}映射更新成功${NC}"
+    echo "$resp" | jq .
+  fi
 }
 
 mapping_delete() {
@@ -273,22 +284,15 @@ mapping_delete() {
     return 0
   fi
 
-  # 查映射数据
-  local resp
-  resp=$(api_get "/openapi/v2/mapping/list")
-  local mapping
-  mapping=$(echo "$resp" | jq --arg d "$domain" --arg p "$port" --arg f "$fwtype" \
-    '.[] | select(.domain == $d and (.port | tostring) == $p and (.fwtype | tostring) == $f)')
-
-  if [[ -z "$mapping" || "$mapping" == "null" ]]; then
-    echo -e "${RED}[ERROR]${NC} 未找到匹配的映射"
-    return 1
-  fi
-
   echo -e "${CYAN}正在删除映射...${NC}"
-  resp=$(api_delete "/openapi/v2/mapping/delete" "$mapping")
-  check_response "$resp" || { echo "$resp" | jq .; return 1; }
-  echo -e "${GREEN}映射已删除${NC}"
+  local resp
+  resp=$(api_delete "/openapi/v2/mappings/$domain/$port/$fwtype")
+  if [[ -z "$resp" ]]; then
+    echo -e "${GREEN}映射已删除${NC}"
+  else
+    check_response "$resp" || { echo "$resp" | jq .; return 1; }
+    echo -e "${GREEN}映射已删除${NC}"
+  fi
 }
 
 mapping_toggle() {
