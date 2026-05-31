@@ -1,0 +1,30 @@
+---
+name: <skill-name>
+description: <一句话描述这个 Skill 做什么，以及何时应该被触发>
+allowed-tools: [Read, Write, Bash, Grep, Glob]
+---
+
+# <Skill 名称>
+
+## 触发条件
+
+- 当用户提到 <场景一> 时触发
+- 当用户提到 <场景二> 时触发
+
+## Instructions
+
+1. <步骤一>
+2. <步骤二>
+3. <步骤三>
+
+## Guidelines
+
+- <约束一>
+- <约束二>
+
+## Examples
+
+### 示例一
+
+**输入**: <用户可能的输入>
+**输出**: <期望的输出>
