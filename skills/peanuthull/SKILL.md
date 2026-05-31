@@ -1,20 +1,20 @@
 ---
 name: peanuthull
-description: 管理花生壳内网穿透映射和设备，包含映射增删改查、连通性测试、域名列表、端口检测、账号信息、本地设备信息、客户端管理
+description: 管理花生壳内网穿透映射，包含映射增删改查、连通性测试、域名列表、端口检测、账号信息
 allowed-tools: [Read, Write, Bash, Grep, Glob]
 ---
 
-# 花生壳管理
+# 花生壳映射管理
 
 ## 触发条件
 
 - 当用户提到花生壳、内网穿透、映射管理、hsk 时触发
 - 当用户需要查看/创建/修改/删除花生壳映射时触发
-- 当用户需要测试映射连通性或管理花生壳客户端时触发
+- 当用户需要测试映射连通性时触发
 
 ## Instructions
 
-所有操作通过 `skills/peanuthull/scripts/hsk.sh` 脚本完成。使用前需确保已设置 `HSK_APIKEY` 环境变量。
+所有操作通过 `skills/peanuthull/scripts/hsk.sh` 脚本完成。使用前需确保已设置 API Key（支持命令行、环境变量、配置文件三层 fallback）。
 
 ### 映射管理
 
@@ -29,9 +29,10 @@ allowed-tools: [Read, Write, Bash, Grep, Glob]
 **创建映射参数说明**：
 - `--domain <域名>` — 外网访问域名
 - `--port <端口>` — 映射端口
-- `--fwtype <协议>` — 协议类型（TCP/HTTP/HTTPS 等）
+- `--fwtype <协议>` — 协议类型（1=TCP, 2=HTTP, 3=HTTPS, 4=UDP）
 - `--inner-host <内网地址>` — 内网目标主机
 - `--inner-port <内网端口>` — 内网目标端口
+- `--memo <名称>` — 备注名称（可选）
 
 ### 连通性测试
 
@@ -39,7 +40,7 @@ allowed-tools: [Read, Write, Bash, Grep, Glob]
 hsk.sh test <domain> <port>
 ```
 
-通过 curl 或 nc 测试外网映射是否可达，并检测本地服务监听状态。
+通过 DNS 解析 → TCP 连接 → HTTP 响应三步检测外网映射是否可达。
 
 ### 域名与端口
 
@@ -48,29 +49,20 @@ hsk.sh test <domain> <port>
 | 域名列表 | `hsk.sh domain list` | 查询可用域名 |
 | 端口检测 | `hsk.sh port check <port>` | 检查端口是否可用 |
 
-### 账号与设备
+### 账号信息
 
-| 操作 | 命令 | 说明 |
-|------|------|------|
-| 账号信息 | `hsk.sh account info` | 查看账号服务信息 |
-| 设备信息 | `hsk.sh device info` | 查看本地设备 SN、在线状态、公网 IP |
+```bash
+hsk.sh account info
+```
 
-### 客户端管理
-
-| 操作 | 命令 | 说明 |
-|------|------|------|
-| 启动 | `hsk.sh client start` | 启动 phddns 守护进程 |
-| 停止 | `hsk.sh client stop` | 停止 phddns 守护进程 |
-| 重启 | `hsk.sh client restart` | 重启 phddns 守护进程 |
-| 状态 | `hsk.sh client status` | 查看客户端运行状态 |
+查看用户 ID、映射用量、带宽、流量、到期时间等账号信息。
 
 ## Guidelines
 
-- 执行前必须检查 `$HSK_APIKEY` 是否已设置，未设置则提示用户设置
 - 脚本依赖 `jq` 解析 JSON，首次运行会自动检测并提示安装
 - 操作失败时分析错误响应并给出可操作的提示，不要盲目重试
 - 删除映射前应向用户确认，因为该操作不可逆
-- 列表输出使用表格格式，状态用颜色区分（绿色=正常/在线，红色=异常/离线）
+- 列表输出使用表格格式，状态用颜色区分（绿色=正常运行/已启用，红色=已禁用）
 
 ## Examples
 
@@ -83,6 +75,11 @@ hsk.sh test <domain> <port>
 
 **输入**: 帮我在花生壳上创建一个映射，把本地的 8080 端口通过 test.example.com 的 80 端口暴露出去
 **输出**: 收集必要参数后执行 `hsk.sh mapping create --domain test.example.com --port 80 --fwtype HTTP --inner-host 127.0.0.1 --inner-port 8080`
+
+### 更新映射内网地址
+
+**输入**: 把「我的映射」的内网地址改成 192.168.1.100
+**输出**: 执行 `hsk.sh mapping update test.example.com 80 2 '{"servicehost":"192.168.1.100"}'`
 
 ### 测试连通性
 

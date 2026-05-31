@@ -3,7 +3,6 @@
 set -euo pipefail
 
 HSK_API="${HSK_API:-https://hsk-api.oray.com}"
-LOCAL_API="${LOCAL_API:-http://127.0.0.1:16062}"
 
 # ---- 颜色 ----
 RED='\033[0;31m'
@@ -81,11 +80,6 @@ api_delete() {
   else
     curl -s -H "$(auth_header)" -X DELETE "$HSK_API$url"
   fi
-}
-
-local_get() {
-  local url="$1"
-  curl -s --connect-timeout 3 "$LOCAL_API$url" 2>/dev/null || true
 }
 
 # fwtype 数字 → 可读标签
@@ -439,69 +433,6 @@ account_info() {
   printf "%-15s %s\n" "到期时间:" "$expiredate"
 }
 
-# ---- 设备信息（本地 API） ----
-device_cmd() {
-  case "${2:-}" in
-    info) device_info ;;
-    *) echo "用法: hsk.sh device info" ;;
-  esac
-}
-
-device_info() {
-  echo -e "${CYAN}正在获取本地设备信息...${NC}"
-
-  local sn_resp mgr_resp
-  sn_resp=$(local_get "/ora_service/getsn")
-  mgr_resp=$(local_get "/ora_service/getmgrurl")
-
-  if [[ -z "$sn_resp" ]]; then
-    echo -e "${RED}[ERROR]${NC} 无法连接本地花生壳客户端 (http://127.0.0.1:16062)" >&2
-    echo "请确认 phddns 客户端正在运行: hsk.sh client status" >&2
-    return 1
-  fi
-
-  local sn password online public_ip mgr_url
-  sn=$(echo "$sn_resp" | jq -r '.sn // .SN // "N/A"')
-  password=$(echo "$sn_resp" | jq -r '.password // .pwd // "N/A"')
-  online=$(echo "$sn_resp" | jq -r '.online // .status // "N/A"')
-  public_ip=$(echo "$sn_resp" | jq -r '.pubip // .public_ip // "N/A"')
-  mgr_url=$(echo "$mgr_resp" | jq -r '.url // .mgrurl // "N/A"' 2>/dev/null || echo "N/A")
-
-  local color="$GREEN"
-  if [[ "$online" == "0" || "$online" == "offline" || "$online" == "false" ]]; then
-    color="$RED"
-  fi
-
-  echo ""
-  printf "${BOLD}本地设备信息${NC}\n"
-  printf "%-15s %s\n" "设备 SN:" "$sn"
-  printf "%-15s %s\n" "密码:" "$password"
-  printf "%-15s ${color}%s${NC}\n" "在线状态:" "$online"
-  printf "%-15s %s\n" "公网 IP:" "$public_ip"
-  printf "%-15s %s\n" "管理页面:" "$mgr_url"
-}
-
-# ---- 客户端管理 ----
-client_cmd() {
-  if ! command -v phddns &>/dev/null; then
-    echo -e "${RED}[ERROR]${NC} phddns 命令未找到" >&2
-    echo "请确认花生壳客户端已安装。下载地址: https://hsk.oray.com/download/" >&2
-    return 1
-  fi
-
-  case "${2:-}" in
-    start)    echo -e "${CYAN}启动花生壳客户端...${NC}"; sudo phddns start ;;
-    stop)     echo -e "${CYAN}停止花生壳客户端...${NC}"; sudo phddns stop ;;
-    restart)  echo -e "${CYAN}重启花生壳客户端...${NC}"; sudo phddns restart ;;
-    status)   echo -e "${CYAN}客户端运行状态:${NC}"; phddns status ;;
-    enable)   echo -e "${CYAN}设置开机自启...${NC}"; sudo phddns enable ;;
-    disable)  echo -e "${CYAN}取消开机自启...${NC}"; sudo phddns disable ;;
-    reset)    echo -e "${YELLOW}重置客户端...${NC}"; sudo phddns reset ;;
-    version)  phddns version ;;
-    *)        echo "用法: hsk.sh client <start|stop|restart|status|enable|disable|reset|version>" ;;
-  esac
-}
-
 # ---- 连通性测试 ----
 test_cmd() {
   local domain="${2:-}" port="${3:-}"
@@ -579,8 +510,6 @@ usage() {
   echo "  domain list                              列出可用域名"
   echo "  port check <port>                        检测端口可用性"
   echo "  account info                             查看账号信息"
-  echo "  device info                              查看本地设备信息"
-  echo "  client <start|stop|restart|status>       管理 phddns 客户端"
   echo "  test <domain> <port>                     测试映射连通性"
   echo ""
   echo -e "${BOLD}API Key 提供方式（优先级从高到低）:${NC}"
@@ -590,7 +519,6 @@ usage() {
   echo ""
   echo -e "${BOLD}其它环境变量:${NC}"
   echo "  HSK_API       云端 API 地址（默认: https://hsk-api.oray.com）"
-  echo "  LOCAL_API     本地 API 地址（默认: http://127.0.0.1:16062）"
   echo "  HSK_CONF      配置文件路径（默认: ~/.hsk.conf）"
 }
 
@@ -610,8 +538,6 @@ main() {
     domain)   domain_cmd "$@" ;;
     port)     port_cmd "$@" ;;
     account)  account_cmd "$@" ;;
-    device)   device_cmd "$@" ;;
-    client)   client_cmd "$@" ;;
     test)     test_cmd "$@" ;;
     help|--help|-h) usage ;;
     *)        usage ;;
